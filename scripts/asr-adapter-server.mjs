@@ -584,7 +584,16 @@ async function handleSignedUrlCheck(res) {
     sendJson(res, 200, { ok: false, missing: signed.missing });
     return;
   }
-  sendJson(res, 200, { ok: true, ...signed });
+  sendJson(res, 200, {
+    ok: true,
+    appId: signed.appId,
+    secretId: signed.secretId,
+    engineModelType: signed.engineModelType,
+    voiceFormat: signed.voiceFormat,
+    needVad: signed.needVad,
+    voiceId: signed.voiceId,
+    signedUrlMasked: signed.signedUrlMasked
+  });
 }
 
 async function handleTranscribe(req, res) {
