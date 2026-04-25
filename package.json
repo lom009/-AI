@@ -1,0 +1,16 @@
+{
+  "name": "pm-workflow-harness-demo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/asr-adapter-server.mjs",
+    "dev": "PORT=8788 node scripts/asr-adapter-server.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "ws": "^8.18.1"
+  }
+}

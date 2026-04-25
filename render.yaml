@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: pda-ai-nursing-demo
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: ASR_PROVIDER
+        value: tencent
+      - key: ASR_MODE
+        value: streaming
+      - key: TENCENT_ASR_ENGINE_MODEL_TYPE
+        value: 16k_zh
+      - key: TENCENT_ASR_VOICE_FORMAT
+        value: "1"
+      - key: TENCENT_ASR_NEED_VAD
+        value: "1"
+      - key: TENCENT_ASR_SAMPLE_RATE
+        value: "16000"
+      - key: ALLOW_REAL_PATIENT_AUDIO
+        value: "false"
+      - key: LOG_AUDIO_PAYLOAD
+        value: "false"
+      - key: TENCENT_APP_ID
+        sync: false
+      - key: TENCENT_SECRET_ID
+        sync: false
+      - key: TENCENT_SECRET_KEY
+        sync: false
+
