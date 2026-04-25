@@ -1457,7 +1457,7 @@
 
     function clearRecognitionState() {
       transcriptRows = [];
-      fields = [];
+      fields = createEmptyFields();
       realtimeSegmentMap = new Map();
       renderTranscript();
       renderFields();
@@ -1488,26 +1488,9 @@
     }
 
     function renderFields() {
-      if (!fields.length) {
-        $("fields").innerHTML = `
-          <section class="form-section">
-            <div class="form-section-head">
-              <div>
-                <h3>入院护理评估表</h3>
-                <span>当前没有语音识别证据，表单不自动填入任何字段。</span>
-              </div>
-              ${pill("0/0 已生成", "amber")}
-            </div>
-          </section>
-        `;
-        updateFormMeta();
-        renderStructuredEvents();
-        renderSummary();
-        return;
-      }
       const sections = [
         ["basic", "患者基础信息（对话识别）", "身份、年龄、床号等不默认写死，必须有来源依据。"],
-        ["admission", "入院信息（对话识别）", "入院方式、诊断、陪护等来自护患对话或测试场景上下文。"],
+        ["admission", "入院信息（对话识别）", "入院方式、诊断、陪护等来自护患对话。"],
         ["assessment", "入院护理评估", "症状、过敏、疼痛、跌倒风险进入护士确认区。"]
       ];
       $("fields").innerHTML = sections.map(([sectionId, title, hint]) => {
@@ -1552,12 +1535,6 @@
     }
 
     function renderStructuredEvents() {
-      if (!fields.length) {
-        $("structuredEvents").innerHTML = `<div class="structured-item"><div class="structured-main"><b>等待结构化提取</b><span>实时转写产生后，这里会显示“字段名：字段值、来源依据、证据原文、置信度”。</span></div></div>`;
-        $("leftStructured").innerHTML = `<div class="left-structured-row"><div class="left-structured-main"><b>等待语音识别</b><span>左侧只同步当前提取结果，不展示预置答案。</span></div></div>`;
-        $("structuredCount").textContent = "0 条";
-        return;
-      }
       const structuredHtml = fields.map((field) => `
         <div class="structured-item">
           <div class="structured-icon">${field.icon}</div>
@@ -1586,47 +1563,36 @@
       `).join("");
       $("structuredEvents").innerHTML = structuredHtml;
       $("leftStructured").innerHTML = leftStructuredHtml;
-      $("structuredCount").textContent = `${fields.length} 条`;
+      $("structuredCount").textContent = `${fields.filter((field) => field.status !== "待识别").length}/${fields.length} 条`;
     }
 
     function renderSummary() {
       $("transcriptCount").textContent = `${transcriptRows.length} 段`;
-      if (!fields.length) {
-        $("summarySegments").textContent = transcriptRows.length;
-        $("summaryFields").textContent = 0;
-        $("summaryReview").textContent = 0;
-        $("formState").className = "pill amber";
-        $("formState").textContent = "待生成";
-        $("bottomNote").textContent = transcriptRows.length
-          ? "已有转写内容，但暂未提取到可填入字段。请继续对话或补充关键字段。"
-          : "等待语音识别后生成结构化字段。";
-        return;
-      }
-      const reviewCount = fields.filter((field) => field.status !== "已确认").length;
-      const extractedCount = fields.filter((field) => field.status !== "待补充").length;
+      const reviewCount = fields.filter((field) => field.status === "待核实").length;
+      const extractedCount = fields.filter((field) => field.status !== "待识别").length;
       $("summarySegments").textContent = transcriptRows.length;
       $("summaryFields").textContent = extractedCount;
       $("summaryReview").textContent = reviewCount;
-      $("formState").className = reviewCount ? "pill amber" : "pill green";
-      $("formState").textContent = reviewCount ? `待核实 ${reviewCount}` : "已确认";
+      $("formState").className = extractedCount ? (reviewCount ? "pill amber" : "pill green") : "pill amber";
+      $("formState").textContent = extractedCount ? (reviewCount ? `待核实 ${reviewCount}` : "已确认") : "待语音录入";
       $("bottomNote").textContent = reviewCount
         ? `已自动提取 ${extractedCount}/${fields.length} 个字段，其中 ${reviewCount} 个字段需要护士核实。`
-        : `已自动提取 ${extractedCount}/${fields.length} 个字段，暂无待核实字段。`;
+        : extractedCount
+          ? `已自动提取 ${extractedCount}/${fields.length} 个字段，暂无待核实字段。`
+          : "字段已就绪，等待语音录入后同步结构化结果。";
     }
 
     function updateFormMeta() {
-      if (!fields.length) {
-        $("formPatient").textContent = "待语音识别";
-        $("formBed").textContent = "待语音识别";
-        $("pdaPatient").textContent = "等待床旁语音采集";
-        return;
-      }
       const fieldByName = Object.fromEntries(fields.map((field) => [field.name, field]));
-      const name = fieldByName["姓名"]?.value || "待识别";
-      const gender = fieldByName["性别"]?.value || "待识别";
-      const age = fieldByName["年龄"]?.value || "待识别";
-      const bed = fieldByName["床号"]?.value || "待识别";
-      const department = fieldByName["科室"]?.value || "待识别";
+      const displayValue = (name) => {
+        const value = fieldByName[name]?.value || "-";
+        return value === "-" ? "待识别" : value;
+      };
+      const name = displayValue("姓名");
+      const gender = displayValue("性别");
+      const age = displayValue("年龄");
+      const bed = displayValue("床号");
+      const department = displayValue("科室");
       $("formPatient").textContent = `${name} · ${gender} · ${age}`;
       $("formBed").textContent = `${bed} · ${department}`;
       $("pdaPatient").textContent = `${name} · ${bed} · ${department}`;
@@ -1877,8 +1843,31 @@
       return rows.map(([speaker, text]) => `${speaker}：${text}`).join(" ");
     }
 
+    function createEmptyFields() {
+      return [
+        makeField("basic", "姓", "姓名", "-", "等待语音录入", "等待护患对话提取", false, true),
+        makeField("basic", "性", "性别", "-", "等待语音录入", "等待护患对话提取", false, true),
+        makeField("basic", "龄", "年龄", "-", "等待语音录入", "等待护患对话提取", false, true),
+        makeField("basic", "床", "床号", "-", "等待语音录入", "等待护患对话提取", false, true),
+        makeField("basic", "号", "住院号", "-", "等待语音录入", "等待护患对话提取", false, true),
+        makeField("basic", "科", "科室", "-", "等待语音录入", "等待护患对话提取", false, true),
+        makeField("admission", "时", "入院时间", "-", "等待语音录入", "等待护患对话提取", false, true),
+        makeField("admission", "入", "入院方式", "-", "等待语音录入", "等待护患对话提取", false, true),
+        makeField("admission", "诊", "入院诊断", "-", "等待语音录入", "等待护患对话提取", false, true),
+        makeField("admission", "护", "护理级别", "-", "等待语音录入", "等待护患对话提取", false, true),
+        makeField("admission", "陪", "陪护情况", "-", "等待语音录入", "等待护患对话提取", false, true),
+        makeField("admission", "责", "责任护士", "-", "等待语音录入", "等待护患对话提取", false, true),
+        makeField("assessment", "诉", "主诉", "-", "等待语音录入", "等待护患对话提取", false, true),
+        makeField("assessment", "史", "既往史", "-", "等待语音录入", "等待护患对话提取", false, true),
+        makeField("assessment", "警", "药物过敏", "-", "等待语音录入", "等待护患对话提取", false, true),
+        makeField("assessment", "食", "食物过敏", "-", "等待语音录入", "等待护患对话提取", false, true),
+        makeField("assessment", "痛", "疼痛评分", "-", "等待语音录入", "等待护患对话提取", false, true),
+        makeField("assessment", "跌", "跌倒风险", "-", "等待语音录入", "等待护患对话提取", false, true)
+      ];
+    }
+
     function extractFieldsFromText(text, scenario = scenarios[currentScenarioId]) {
-      if (!text || !text.trim()) return [];
+      if (!text || !text.trim()) return createEmptyFields();
       const includes = (pattern) => pattern.test(text);
       const nameEvidence = findEvidence(text, new RegExp(`${scenario?.patient || ""}|我叫|我是|核对`));
       const nameMatch = text.match(/(?:我叫|我是)([\u4e00-\u9fa5]{2,4})/) || text.match(/([\u4e00-\u9fa5]{2,4})(?:阿姨|大叔|先生|女士)/);
@@ -1940,10 +1929,10 @@
       if (missing) score = 0.35;
       score = Math.max(0.30, Math.min(0.99, score));
       const confidence = score.toFixed(2);
-      const status = missing ? "待补充" : ambiguous || score < 0.75 ? "待核实" : "已确认";
+      const status = missing ? "待识别" : ambiguous || score < 0.75 ? "待核实" : "已确认";
       const tone = status === "已确认" ? "green" : "amber";
       const reason = missing
-        ? "未命中可用证据，默认低分"
+        ? "等待语音证据，不自动填入"
         : sourceType === "system"
           ? "来自系统上下文，不是语音识别结果，需与对话字段区分"
           : ambiguous
